@@ -1,21 +1,49 @@
 require 'active_record'
 require 'yaml'
+require 'erb'
+require 'dotenv/tasks'
 require './models/todo'
 
-# データベース設定をロード
-db_config = YAML.load_file('config/database.yml')
-ActiveRecord::Base.establish_connection(db_config['development'])
+task :environment do
+  Dotenv.load
+end
 
-# マイグレーションタスクの定義
+# データベース設定をロード
+db_config = YAML.load(ERB.new(File.read('config/database.yml')).result)
+
 namespace :db do
+  desc "Create the database"
+  task create: :environment do
+    config = db_config['development']
+    ActiveRecord::Base.establish_connection(config.merge('database' => 'postgres', 'schema_search_path' => 'public'))
+    ActiveRecord::Base.connection.create_database(config['database'], config)
+    puts "Database '#{config['database']}' has been created."
+  end
+
   desc "Migrate the database"
-  task :migrate do
-    ActiveRecord::MigrationContext.new('db/migrate', ActiveRecord::SchemaMigration).migrate
-    puts 'Database has been migrated'
+  task migrate: :environment do
+    ActiveRecord::Base.establish_connection(db_config['development'])
+    ActiveRecord::MigrationContext.new(ActiveRecord.version.to_s >= '6' ? ['db/migrate', ActiveRecord::SchemaMigration] : 'db/migrate').migrate
+    puts 'Database has been migrated.'
+  end
+
+  desc "Drop the database"
+  task drop: :environment do
+    ActiveRecord::Base.establish_connection(db_config['development'])
+    db_name = ActiveRecord::Base.connection.current_database
+    ActiveRecord::Base.connection.disconnect!
+
+    # PostgreSQLのデフォルトデータベース 'postgres' に接続
+    ActiveRecord::Base.establish_connection(db_config['development'].merge('database' => 'postgres', 'schema_search_path' => 'public'))
+
+    ActiveRecord::Base.connection.drop_database(db_name)
+    puts "Database '#{db_name}' has been dropped."
   end
 
   desc "Load the seed data from db/seeds.rb"
-  task :seed do
+  task seed: :environment do
+    ActiveRecord::Base.establish_connection(db_config['development'])
     load 'db/seeds.rb'
+    puts 'Seed data has been loaded.'
   end
 end

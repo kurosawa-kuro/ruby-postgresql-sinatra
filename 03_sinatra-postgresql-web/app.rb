@@ -1,19 +1,20 @@
 require 'sinatra'
 require 'pg'
+require 'dotenv/load' # 追加
 
 # データベース接続設定
-set :db_config, {
-  host: 'localhost',
-  dbname: 'development_db',
-  user: 'dev_user',
-  password: 'dev_password'
+conn_params = {
+  host: ENV['DB_HOST'],
+  dbname: ENV['DB_NAME'],
+  user: ENV['DB_USER'],
+  password: ENV['DB_PASSWORD']
 }
 
 set :environment, :production
 
 # todoの一覧を表示するページ
 get '/' do
-  conn = PG.connect(settings.db_config)
+  conn = PG.connect(conn_params) # 修正
   result = conn.exec('SELECT * FROM todos')
 
   @todos = result.map do |row|
@@ -22,5 +23,5 @@ get '/' do
 
   conn.close
 
-  erb :todos
+  erb :todos # HTMLテンプレートをレンダリング
 end
